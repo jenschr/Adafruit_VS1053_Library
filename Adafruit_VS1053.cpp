@@ -46,6 +46,13 @@ ICACHE_RAM_ATTR
 #endif
 static void feeder(void) { myself->feedBuffer(); }
 
+static void feedEsp32( void * pvParameters ){
+  for(;;){
+    myself->feedBuffer();
+    delay(10);
+  } 
+}
+
 boolean Adafruit_VS1053_FilePlayer::useInterrupt(uint8_t type) {
   myself = this; // oy vey
 
@@ -75,7 +82,16 @@ boolean Adafruit_VS1053_FilePlayer::useInterrupt(uint8_t type) {
 
     // Start the timer counting
     timer.resume();
-
+#elif defined(ESP32)
+    TaskHandle_t Task1;
+    xTaskCreatePinnedToCore(
+                  feedEsp32,   /* Task function. */
+                  "Task1",     /* name of task. */
+                  10000,       /* Stack size of task */
+                  NULL,        /* parameter of the task */
+                  1,           /* priority of the task */
+                  &Task1,      /* Task handle to keep track of created task */
+                  0);          /* pin task to core 0 */  
 #else
     return false;
 #endif
@@ -89,8 +105,12 @@ boolean Adafruit_VS1053_FilePlayer::useInterrupt(uint8_t type) {
     !defined(ARDUINO_STM32_FEATHER)
     SPI.usingInterrupt(irq);
 #endif
-    attachInterrupt(irq, feeder, CHANGE);
-    return true;
+    #if defined(ESP32)
+      Serial.print("ESP32 cannot use IRQ. Use VS1053_FILEPLAYER_TIMER0_INT instead.");
+    #else
+      attachInterrupt(irq, feeder, CHANGE);
+      return true;
+    #endif
   }
   return false;
 }
@@ -138,6 +158,19 @@ boolean Adafruit_VS1053_FilePlayer::begin(void) {
 
 boolean Adafruit_VS1053_FilePlayer::playFullFile(const char *trackname) {
   if (!startPlayingFile(trackname))
+    return false;
+
+  while (playingMusic) {
+    // twiddle thumbs
+    feedBuffer();
+    delay(5); // give IRQs a chance
+  }
+  // music file finished!
+  return true;
+}
+
+boolean Adafruit_VS1053_FilePlayer::playFullFile(fs::File & file, const char *trackname) {
+  if (!startPlayingFile(file, trackname))
     return false;
 
   while (playingMusic) {
@@ -220,6 +253,11 @@ unsigned long Adafruit_VS1053_FilePlayer::mp3_ID3Jumper(File mp3) {
 }
 
 boolean Adafruit_VS1053_FilePlayer::startPlayingFile(const char *trackname) {
+  currentTrack = SD.open(trackname);
+  return startPlayingFile(currentTrack, trackname);
+}
+
+boolean Adafruit_VS1053_FilePlayer::startPlayingFile(fs::File & file, const char *trackname) {
   // reset playback
   sciWrite(VS1053_REG_MODE, VS1053_MODE_SM_LINE1 | VS1053_MODE_SM_SDINEW |
                                 VS1053_MODE_SM_LAYER12);
@@ -227,7 +265,7 @@ boolean Adafruit_VS1053_FilePlayer::startPlayingFile(const char *trackname) {
   sciWrite(VS1053_REG_WRAMADDR, 0x1e29);
   sciWrite(VS1053_REG_WRAM, 0);
 
-  currentTrack = SD.open(trackname);
+  currentTrack = file;
   if (!currentTrack) {
     return false;
   }

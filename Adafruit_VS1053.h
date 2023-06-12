@@ -364,6 +364,15 @@ public:
    * @return Returns true when file starts playing
    */
   boolean startPlayingFile(const char *trackname);
+
+  /*!
+   * @brief Begin playing the specified file
+   * @param &file File to play
+   * @param *trackname Filename
+   * @return Returns true when file starts playing
+   */
+  boolean startPlayingFile(File &file, const char *trackname);
+
   /*!
    * @brief Play the complete file. This function will not return until the
    * playback is complete
@@ -371,6 +380,16 @@ public:
    * @return Returns true when file starts playing
    */
   boolean playFullFile(const char *trackname);
+
+  /*!
+   * @brief Play the complete file. This function will not return until the
+   * playback is complete
+   * @param &file File to play
+   * @param *trackname Filename
+   * @return Returns true when file starts playing
+   */
+  boolean playFullFile(fs::File &file, const char *trackname);
+
   void stopPlaying(void); //!< Stop playback
   /*!
    * @brief If playback is paused
